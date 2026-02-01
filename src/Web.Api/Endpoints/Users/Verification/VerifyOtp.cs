@@ -1,5 +1,6 @@
 ﻿using Application.Abstractions.Messaging;
 using Application.Users.Verification.VerifyOtp;
+using Domain.Otps;
 using SharedKernel;
 using Web.Api.Extensions;
 using Web.Api.Infrastructure;
@@ -10,8 +11,9 @@ internal sealed class VerifyOtp : IEndpoint
 {
     internal sealed class Request
     {
-        public string Destination { get; set; }
+        public string Destination { get; set; } = null!;
         public string OtpCode { get; set; } = null!;
+        public OtpType OtpType { get; set; }
     }
 
     public void MapEndpoint(IEndpointRouteBuilder app)
@@ -24,12 +26,18 @@ internal sealed class VerifyOtp : IEndpoint
         {
             var command = new VerifyOtpCommand(
                 request.Destination,
-                request.OtpCode
+                request.OtpCode,
+                request.OtpType
             );
+
             Result result = await handler.Handle(command, ct);
-            return result.Match(Results.NoContent, CustomResults.Problem);
+
+            return result.Match(
+                // ✅ send JSON so Angular can read it
+                () => Results.Ok(new { isValid = true }),
+                CustomResults.Problem
+            );
         })
-        .WithTags(Tags.Users)
-        .RequireAuthorization();
+        .WithTags(Tags.Users);
     }
 }

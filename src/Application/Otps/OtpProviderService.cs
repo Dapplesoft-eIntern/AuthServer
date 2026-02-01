@@ -1,4 +1,5 @@
-﻿using Application.Abstractions.Data;
+﻿using Application.Otps.OtpTemplate;
+using Application.Abstractions.Data;
 using Application.Abstractions.Email;
 using Application.Abstractions.Otps;
 using Application.Abstractions.SMS;
@@ -23,7 +24,7 @@ public sealed class OtpProviderService(
 
     public async Task<Result<Guid>> SendOtpAsync(
         string destination,
-        OtpType? otpType = OtpType.Default,
+        OtpType? otpType,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(destination))
@@ -40,7 +41,7 @@ public sealed class OtpProviderService(
         {
             return Result.Failure<Guid>(ex.Message);
         }
-        
+
         string normalizedDestination = destinationType switch
         {
             OtpDestinationType.Email => Normalizer.EmailAddressLowerCase(destination),
@@ -48,16 +49,35 @@ public sealed class OtpProviderService(
             _ => destination
         };
 
+        string? userName = null;
+
+        if (destinationType == OtpDestinationType.Email)
+        {
+            userName = await context.Users
+                .Where(u => u.Email == normalizedDestination)
+                .Select(u => u.FullName)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+        else if (destinationType == OtpDestinationType.Phone)
+        {
+            userName = await context.Users
+                .Where(u => u.Phone == normalizedDestination)
+                .Select(u => u.FullName)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+
+
         string otpValue = otpGenerator.GenerateOtp(4);
 
         // Send OTP first
         Result sendResult = destinationType switch
         {
             OtpDestinationType.Phone =>
-                await SendSmsOtp(normalizedDestination, otpValue, cancellationToken),
+                await SendSmsOtp(normalizedDestination, otpValue, userName ?? "User", cancellationToken),
 
             OtpDestinationType.Email =>
-                await SendEmailOtp(normalizedDestination, otpValue, cancellationToken),
+                await SendEmailOtp(normalizedDestination, otpValue, userName ?? "User", cancellationToken),
 
             _ => Result.Failure("Unsupported OTP destination")
         };
@@ -91,13 +111,14 @@ public sealed class OtpProviderService(
     private async Task<Result> SendSmsOtp(
         string phone,
         string otp,
+        string userName,
         CancellationToken ct)
     {
         string message =
-            $"Your OTP is {otp}. It will expire in {OtpExpiryMinutes} minutes.";
+            $"Dear {userName}, Your OTP is {otp}. It will expire in {OtpExpiryMinutes} minutes.";
 
         Result otpResult = await smsService.SendOtpAsync(Normalizer.PhoneNumber(phone), message, ct);
-        
+
         if (otpResult.IsFailure)
         {
             return Result.Failure(otpResult.Error);
@@ -109,20 +130,36 @@ public sealed class OtpProviderService(
     private async Task<Result> SendEmailOtp(
         string email,
         string otp,
+        string userName,
         CancellationToken ct)
     {
+        string templatePath = Path.Combine(AppContext.BaseDirectory, "OtpTemplate", "OtpHtml.html");
+        if (!File.Exists(templatePath))
+        {
+            return Result.Failure($"Email template not found: {templatePath}");
+        }
+        string otpBoxesHtml = OtpEmailBuilder.BuildHorizontalOtpBoxes(otp);
+        // Use the async overload that returns Task<string> by passing the CancellationToken (ct).
+        string body = await EmailTemplateRenderer.RenderAsync(
+            templatePath,
+            new Dictionary<string, string>
+            {
+                ["NAME"] = userName, // or load from DB if you want
+                ["OTP_BOXES"] = otpBoxesHtml,
+                ["EXPIRY_MINUTES"] = "3",
+            },
+            ct
+        );
         var message = new EmailMessage
         {
             To = email,
             Subject = "Your OTP Code",
-            Body =
-                $"<p>Your OTP is <strong>{otp}</strong>.</p>" +
-                $"<p><i>It will expire in {OtpExpiryMinutes} minutes.</i></p>"
+            Body = body,
         };
 
         Result otpResult = await emailService.SendAsync(message, ct);
 
-        if(otpResult.IsFailure)
+        if (otpResult.IsFailure)
         {
             return Result.Failure(otpResult.Error);
         }
@@ -133,7 +170,7 @@ public sealed class OtpProviderService(
     public async Task<Result> VerifyOtpAsync(
         string destination,
         string otpToken,
-        OtpType? otpType = OtpType.Default,
+        OtpType? otpType,
         CancellationToken cancellationToken = default)
     {
 
@@ -194,7 +231,7 @@ public sealed class OtpProviderService(
 
         // Mark OTP as used
         otp.IsUsed = true;
-
+        otp.IsExpired = true;
         await context.SaveChangesAsync(cancellationToken);
 
         return Result.Success();
