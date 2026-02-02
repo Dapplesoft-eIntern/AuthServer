@@ -7,12 +7,12 @@ public interface IOtpProviderService
 {
     Task<Result<Guid>> SendOtpAsync(
         string destination,
-        OtpType? otpType = OtpType.Default,
+        OtpType? otpType ,
         CancellationToken cancellationToken = default);
 
     Task<Result> VerifyOtpAsync(
         string destination,
         string otpToken,
-        OtpType? otpType = OtpType.Default,
+        OtpType? otpType,
         CancellationToken cancellationToken = default);
 }

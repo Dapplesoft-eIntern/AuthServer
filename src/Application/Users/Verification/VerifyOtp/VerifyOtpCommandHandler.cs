@@ -61,7 +61,7 @@ internal sealed class VerifyOtpCommandHandler(
             return Result.Failure("Entered Email or Phone Number is not in use in ther user profile");
         }
 
-        if (user.IsVerified)
+        if (command.OtpType == OtpType.Verification && user.IsVerified)
         {
             return Result.Failure("User Already Verified");
         }
@@ -70,7 +70,7 @@ internal sealed class VerifyOtpCommandHandler(
         Result otpResult = await otpProvider.VerifyOtpAsync(
             command.Destination,
             command.OtpToken,
-            OtpType.Verification,
+            command.OtpType,
             cancellationToken
         );
 
@@ -80,11 +80,12 @@ internal sealed class VerifyOtpCommandHandler(
             return Result.Failure($"Otp Verification Failed : {otpResult.Error}");
         }
 
-        user.IsVerified = true;
-
-        user.UpdatedAt = dateTimeProvider.UtcNow;
-
-        await context.SaveChangesAsync(cancellationToken);
+        if (command.OtpType == OtpType.Verification)
+        {
+            user.IsVerified = true;
+            user.UpdatedAt = dateTimeProvider.UtcNow;
+            await context.SaveChangesAsync(cancellationToken);
+        }
 
         return Result.Success();
     }

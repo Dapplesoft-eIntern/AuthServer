@@ -9,9 +9,10 @@ internal class RequestOtpVerifyCommandValidator : AbstractValidator<RequestOtpVe
     public RequestOtpVerifyCommandValidator()
     {
         RuleFor(c => c.Destination)
+            .Cascade(CascadeMode.Stop) // ✅ STOP if NotEmpty fails (prevents null in Must)
             .NotEmpty()
             .WithMessage("Destination cannot be empty.")
-            .Must(dist => 
+            .Must(dist =>
                 Regex.IsMatch(dist, @"^(?:\+?88)?01[3-9]\d{8}$") ||
                 new EmailAddressAttribute().IsValid(dist)
             )

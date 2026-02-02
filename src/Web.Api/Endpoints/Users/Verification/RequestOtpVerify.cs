@@ -1,5 +1,6 @@
 ﻿using Application.Abstractions.Messaging;
 using Application.Users.Verification.RequstOtpVerify;
+using Domain.Otps;
 using SharedKernel;
 using Web.Api.Extensions;
 using Web.Api.Infrastructure;
@@ -12,6 +13,7 @@ internal sealed class RequestOtpVerify : IEndpoint
     internal sealed class Request
     {
         public string Destination { get; set; }
+        public OtpType OtpType { get; set; }
     }
 
     public void MapEndpoint(IEndpointRouteBuilder app)
@@ -23,12 +25,12 @@ internal sealed class RequestOtpVerify : IEndpoint
         ) =>
         {
             var command = new RequestOtpVerifyCommand(
-                request.Destination
+                request.Destination,
+                request.OtpType
             );
             Result<RequestOtpVerifyResponse> result = await handler.Handle(command, ct);
             return result.Match(Results.Ok, CustomResults.Problem);
         })
-        .WithTags(Tags.Users)
-        .RequireAuthorization();
+        .WithTags(Tags.Users);
     }
 }

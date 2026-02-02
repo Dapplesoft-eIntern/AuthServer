@@ -65,7 +65,7 @@ internal sealed class RequestOtpVerifyCommandHandler(
         }
 
         // Check verification status
-        if (user.IsVerified)
+        if (command.OtpType == OtpType.Verification && user.IsVerified)
         {
             return Result.Failure<RequestOtpVerifyResponse>("User is already verified.");
         }
@@ -74,7 +74,7 @@ internal sealed class RequestOtpVerifyCommandHandler(
         Otp? otp = await context.Otp
             .Where(o =>
                 o.Destination == normalizedDestination &&
-                o.OtpType == OtpType.Verification &&
+                o.OtpType == command.OtpType &&
                 !o.IsUsed &&
                 !o.IsExpired)
             .OrderByDescending(o => o.ExpiresAt)
@@ -97,7 +97,7 @@ internal sealed class RequestOtpVerifyCommandHandler(
         // Send OTP (this internally creates and sends OTP)
         Result<Guid> otpResult = await otpProviderService.SendOtpAsync(
             command.Destination,
-            OtpType.Verification,
+            command.OtpType,
             cancellationToken
         );
 

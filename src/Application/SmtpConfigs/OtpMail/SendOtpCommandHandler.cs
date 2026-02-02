@@ -19,6 +19,7 @@ internal sealed class SendOtpCommandHandler(
         Result<Guid> otpResult = await otpProviderService.SendOtpAsync(
             command.RecipientEmail,
             OtpType.Default,
+            
             cancellationToken
         );
 

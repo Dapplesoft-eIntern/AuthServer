@@ -19,7 +19,8 @@
     <ProjectReference Include="..\SharedKernel\SharedKernel.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
+
+	<ItemGroup>
 	<InternalsVisibleTo Include="Application.UnitTests" />
   </ItemGroup>
 
